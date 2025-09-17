@@ -1,52 +1,55 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-/**
- * Navigation bar displayed on every page. Shows links based on user role.
- */
 export default function Navbar() {
   const [user, setUser] = useState(null);
 
-  // Load user from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const data = localStorage.getItem('user');
-      if (data) {
-        setUser(JSON.parse(data));
-      }
+      const data = localStorage.getItem('util_user');
+      if (data) setUser(JSON.parse(data));
     }
   }, []);
 
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
-      setUser(null);
-    }
+  const logout = () => {
+    localStorage.removeItem('util_user');
+    window.location.href = '/';
   };
 
   return (
-    <nav style={{ padding: '1rem', borderBottom: '1px solid #eee', marginBottom: '1rem' }}>
-      <Link href="/">
-        <span style={{ fontWeight: 'bold', marginRight: '1rem' }}>Util</span>
-      </Link>
-      <Link href="/search" style={{ marginRight: '1rem' }}>Rechercher</Link>
-      {user && user.role === 'client' && (
-        <Link href="/dashboard/client" style={{ marginRight: '1rem' }}>Mon tableau de bord</Link>
-      )}
-      {user && user.role === 'professional' && (
-        <Link href="/dashboard/provider" style={{ marginRight: '1rem' }}>Mon tableau de bord</Link>
-      )}
-      {!user && (
-        <>
-          <Link href="/login" style={{ marginRight: '1rem' }}>Connexion</Link>
-          <Link href="/signup" style={{ marginRight: '1rem' }}>Inscription</Link>
-        </>
-      )}
-      {user && (
-        <button onClick={handleLogout} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#0070f3' }}>
-          Déconnexion
-        </button>
-      )}
+    <nav style={{
+      padding: '12px 0', marginBottom: 16, borderBottom: '1px solid #eee',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <Link href="/"><span style={{ fontWeight: 800, fontSize: 20, letterSpacing: .3 }}>Util</span></Link>
+        <Link href="/search">Rechercher</Link>
+        <Link href="/categories">Catégories</Link>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {user ? (
+          <>
+            {user.role === 'client' ? (
+              <Link href="/dashboard/client">Mon espace</Link>
+            ) : (
+              <Link href="/dashboard/provider">Mon espace</Link>
+            )}
+            <button onClick={logout} style={{ background: '#111', color: '#fff', border: 0, borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
+              Déconnexion
+            </button>
+          </>
+        ) : (
+          <>
+            <Link href="/login">Connexion</Link>
+            <Link href="/signup">
+              <span style={{ background: '#111', color: '#fff', borderRadius: 8, padding: '8px 12px' }}>
+                S’inscrire
+              </span>
+            </Link>
+          </>
+        )}
+      </div>
     </nav>
   );
 }
