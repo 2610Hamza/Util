@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import Stepper from '../components/Stepper';
 import UploadBox from '../components/UploadBox';
 
-// Util: slugifier un identifiant à partir de l'email
 const safeId = (s) =>
   (s || '')
     .toLowerCase()
@@ -23,7 +22,6 @@ const allCategories = [
 ];
 
 const initial = {
-  // Étape 1
   email: '',
   password: '',
   phone: '',
@@ -31,17 +29,14 @@ const initial = {
   lastName: '',
   city: '',
   categories: [],
-  // Étape 2
   idType: 'cni',
   idFilesUrls: [],
   selfieUrls: [],
-  // Étape 3
   companyType: 'auto-entrepreneur',
   siren: '',
   siret: '',
   insuranceUrls: [],
   diplomasUrls: [],
-  // Étape 4
   terms: false,
 };
 
@@ -50,7 +45,6 @@ export default function SignupPro() {
   const [data, setData] = useState(initial);
   const [submitting, setSubmitting] = useState(false);
 
-  // Dossier Supabase selon l'email (ex: pros/hamza-gmail-com)
   const proFolder = useMemo(() => {
     const slug = safeId(data.email || 'prospect');
     return `pros/${slug}`;
@@ -64,10 +58,19 @@ export default function SignupPro() {
   const submit = async () => {
     setSubmitting(true);
     try {
-      // Démo : à la prochaine étape on sauvegardera en base
-      console.log('SUBMIT_PRO_ONBOARDING', data);
-      alert('Candidature envoyée. Nous validerons vos documents sous peu.');
+      const res = await fetch('/api/pro/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erreur');
+
+      alert('Candidature envoyée ✔️ Nous validerons vos documents sous peu.');
       window.location.href = '/';
+    } catch (e) {
+      console.error(e);
+      alert('Échec de l’envoi. Réessaie ou contacte le support.');
     } finally {
       setSubmitting(false);
     }
@@ -76,7 +79,6 @@ export default function SignupPro() {
   return (
     <div>
       <h1>Inscription Professionnel</h1>
-
       <Stepper steps={STEPS} current={step} />
 
       {step === 0 && <StepAccount data={data} setData={setData} />}
@@ -113,7 +115,7 @@ export default function SignupPro() {
   );
 }
 
-/* -------------------- Sous-composants & helpers -------------------- */
+/* -------------------- Sous-composants -------------------- */
 
 function Field({ label, children, help }) {
   return (
@@ -160,7 +162,7 @@ function Checkbox({ checked, onChange, label }) {
   );
 }
 
-/* ===== Étape 1 : Compte & coordonnées ===== */
+/* Étape 1 */
 function StepAccount({ data, setData }) {
   return (
     <div className="kard" style={{ padding: 16 }}>
@@ -235,7 +237,7 @@ function StepAccount({ data, setData }) {
   );
 }
 
-/* ===== Étape 2 : Identité ===== */
+/* Étape 2 */
 function StepIdentity({ data, setData, proFolder }) {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -251,7 +253,6 @@ function StepIdentity({ data, setData, proFolder }) {
           </Select>
         </Field>
 
-        {/* 👉 Dépose ici ta carte d’identité (recto/verso ou passeport) */}
         <UploadBox
           label="Pièce d’identité (recto/verso ou passeport)"
           bucket="util-docs"
@@ -261,7 +262,6 @@ function StepIdentity({ data, setData, proFolder }) {
           }
         />
 
-        {/* 👉 Dépose ici un selfie (liveness) */}
         <UploadBox
           label="Selfie / Liveness"
           bucket="util-docs"
@@ -273,14 +273,13 @@ function StepIdentity({ data, setData, proFolder }) {
       </div>
 
       <div className="muted" style={{ fontSize: 12 }}>
-        Astuce : pour validation accélérée, assurez-vous que les photos sont
-        nettes, sans reflet, et bien cadrées.
+        Astuce : pour validation accélérée, photos nettes et bien cadrées.
       </div>
     </div>
   );
 }
 
-/* ===== Étape 3 : Entreprise & certificats ===== */
+/* Étape 3 */
 function StepCompany({ data, setData, proFolder }) {
   return (
     <div className="kard" style={{ padding: 16 }}>
@@ -321,7 +320,6 @@ function StepCompany({ data, setData, proFolder }) {
         </Field>
       </div>
 
-      {/* 👉 Attestation d’assurance */}
       <UploadBox
         label="Attestation d’assurance pro (RC Pro)"
         accept="application/pdf,image/*"
@@ -332,7 +330,6 @@ function StepCompany({ data, setData, proFolder }) {
         }
       />
 
-      {/* 👉 Diplômes / certificats */}
       <UploadBox
         label="Diplômes / Certificats"
         accept="application/pdf,image/*"
@@ -346,7 +343,7 @@ function StepCompany({ data, setData, proFolder }) {
   );
 }
 
-/* ===== Étape 4 : Récapitulatif ===== */
+/* Étape 4 */
 function StepReview({ data }) {
   return (
     <div className="kard" style={{ padding: 16 }}>
@@ -390,15 +387,13 @@ function StepReview({ data }) {
           checked={data.terms}
           onChange={(e) => (data.terms = e.target.checked)}
         />
-        <span>
-          Je certifie l’exactitude de mes informations et j’accepte les CGU.
-        </span>
+        <span>Je certifie l’exactitude de mes informations et j’accepte les CGU.</span>
       </label>
     </div>
   );
 }
 
-/* ===== Validation par étape ===== */
+/* Validation */
 function validate(step, d) {
   if (step === 0) {
     return (
