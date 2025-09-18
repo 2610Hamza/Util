@@ -23,13 +23,17 @@ export default function Navbar() {
         <nav className="nav-links">
           <Link href="/search">Rechercher</Link>
           <Link href="/categories">Catégories</Link>
+          <Link href="/signup-pro">Devenir pro</Link>
         </nav>
       </div>
 
       <div className="nav-cta">
         {user ? (
           <>
-            <Link href={user.role === 'client' ? '/dashboard/client' : '/dashboard/provider'} className="btn">Mon espace</Link>
+            <Link
+              href={user.role === 'client' ? '/dashboard/client' : '/dashboard/provider'}
+              className="btn"
+            >Mon espace</Link>
             <button className="btn btn-primary" onClick={logout}>Déconnexion</button>
           </>
         ) : (
