@@ -1,24 +1,24 @@
-import Head from 'next/head';
 import Navbar from './Navbar';
 import Footer from './Footer';
 
-/**
- * Layout component wraps all pages to provide a consistent header and footer.
- * It also sets some default meta tags for SEO.
- */
-export default function Layout({ children, title = 'Util' }) {
+export default function Layout({ children }) {
   return (
     <>
-      <Head>
-        <title>{title}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="description" content="Util – Trouvez un professionnel rapidement pour tous vos besoins." />
-      </Head>
-      <Navbar />
-      <main style={{ minHeight: '80vh', padding: '1rem', maxWidth: '900px', margin: '0 auto' }}>
+      <header className="header">
+        <div className="container nav-row">
+          <Navbar />
+        </div>
+      </header>
+
+      <main className="container" style={{ padding: '24px 0 48px' }}>
         {children}
       </main>
-      <Footer />
+
+      <footer>
+        <div className="container" style={{ padding: '24px 0 48px' }}>
+          <Footer />
+        </div>
+      </footer>
     </>
   );
 }

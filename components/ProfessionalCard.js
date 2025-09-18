@@ -1,21 +1,24 @@
 import Link from 'next/link';
 
 export default function ProfessionalCard({ professional }) {
+  const name = professional.name || professional.displayName || 'Professionnel';
+  const cats = professional.category || (professional.categories && professional.categories.join(', ')) || '—';
+  const city = professional.location || professional.city || '—';
+  const hasRating = typeof professional.ratingAvg !== 'undefined' && professional.ratingCount > 0;
+
   return (
-    <div style={{ border: '1px solid #eee', padding: 16, borderRadius: 12, background: '#fff' }}>
-      <h3 style={{ marginTop: 0 }}>{professional.name || professional.displayName || 'Professionnel'}</h3>
-      <p style={{ color: '#555', marginTop: 4, marginBottom: 8 }}>
-        {professional.category || (professional.categories && professional.categories.join(', '))} · {professional.location || professional.city || '—'}
+    <div className="kard">
+      <h3 style={{ marginTop: 0 }}>{name}</h3>
+      <p className="muted" style={{ marginTop: 4, marginBottom: 8 }}>
+        {cats} · {city}
       </p>
-      {'ratingAvg' in professional && professional.ratingCount > 0 ? (
-        <p style={{ margin: 0 }}>
-          ⭐ {Number(professional.ratingAvg).toFixed(1)} ({professional.ratingCount})
-        </p>
-      ) : <p style={{ margin: 0, color: '#777' }}>Pas encore d’avis</p>}
+      {hasRating ? (
+        <p style={{ margin: 0 }}>⭐ {Number(professional.ratingAvg).toFixed(1)} ({professional.ratingCount})</p>
+      ) : (
+        <p className="muted" style={{ margin: 0 }}>Pas encore d’avis</p>
+      )}
       <div style={{ marginTop: 12 }}>
-        <Link href={`/professionals/${professional.id}`}>
-          <span style={{ background: '#111', color: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Voir le profil</span>
-        </Link>
+        <Link href={`/professionals/${professional.id}`} className="btn btn-primary">Voir le profil</Link>
       </div>
     </div>
   );
