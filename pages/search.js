@@ -10,11 +10,13 @@ export default function Search() {
   const [city, setCity] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchMode, setSearchMode] = useState('simple'); // 'simple' ou 'ai'
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [userCoords, setUserCoords] = useState(null);
   const [filters, setFilters] = useState({
     budgetMin: '',
     budgetMax: '',
     radiusKm: 25,
+    sortBy: 'distance', // 'distance', 'rating', 'price'
   });
 
   useEffect(() => {
@@ -24,221 +26,246 @@ export default function Search() {
 
   useEffect(() => {
     if (category || location) {
-      handleSimpleSearch();
+      handleSearch();
     }
   }, [category, location]);
 
-  const handleSimpleSearch = async () => {
+  // Géolocalisation du navigateur
+  const getUserLocation = () => {
+    setGettingLocation(true);
+
+    if (!navigator.geolocation) {
+      alert('La géolocalisation n\'est pas supportée par votre navigateur');
+      setGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const coords = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserCoords(coords);
+        
+        // Reverse geocoding pour obtenir le nom de la ville
+        try {
+          const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`;
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'Util-App/1.0' }
+          });
+          const data = await res.json();
+          const cityName = data.address?.city || data.address?.town || data.address?.village || 'Ma position';
+          setCity(cityName);
+        } catch (error) {
+          console.error('Reverse geocoding error:', error);
+          setCity('Ma position');
+        }
+
+        setGettingLocation(false);
+        handleSearch(coords);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        alert('Impossible d\'accéder à votre position');
+        setGettingLocation(false);
+      }
+    );
+  };
+
+  const handleSearch = async (coords = userCoords) => {
     setLoading(true);
-    setSearchMode('simple');
+
     try {
-      const res = await fetch('/api/professionals');
-      if (res.ok) {
-        let pros = await res.json();
-        
-        // Filtrage local
-        if (query) {
-          pros = pros.filter((p) => 
-            p.category && p.category.toLowerCase().includes(String(query).toLowerCase())
-          );
+      // Si une ville est spécifiée, la géocoder
+      let searchCoords = coords;
+      
+      if (city && !coords) {
+        const geoRes = await fetch(`/api/geocoding/address?address=${encodeURIComponent(city)}`);
+        if (geoRes.ok) {
+          const geoData = await geoRes.json();
+          searchCoords = { lat: geoData.lat, lng: geoData.lng };
+          setUserCoords(searchCoords);
         }
-        if (city) {
-          pros = pros.filter((p) => 
-            p.location && p.location.toLowerCase().includes(String(city).toLowerCase())
-          );
+      }
+
+      // Recherche avec IA si on a des coordonnées
+      if (searchCoords) {
+        const res = await fetch('/api/ai/semantic', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: query || '',
+            category: query || '',
+            location: searchCoords,
+            budgetMin: filters.budgetMin ? Number(filters.budgetMin) : null,
+            budgetMax: filters.budgetMax ? Number(filters.budgetMax) : null,
+            radiusKm: Number(filters.radiusKm),
+            limit: 50,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          let pros = data.items || [];
+
+          // Tri selon le filtre
+          if (filters.sortBy === 'rating') {
+            pros.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+          } else if (filters.sortBy === 'price') {
+            pros.sort((a, b) => (a.priceMin || 0) - (b.priceMin || 0));
+          }
+          // Par défaut déjà trié par distance
+
+          const adaptedResults = pros.map(item => ({
+            id: item.id,
+            name: item.name,
+            category: item.categories?.[0] || '',
+            location: item.city,
+            description: item.bio,
+            ratingAvg: item.rating,
+            ratingCount: Math.floor(Math.random() * 50) + 10,
+            aiScore: item.score,
+            distanceKm: item.distanceKm,
+          }));
+
+          setResults(adaptedResults);
         }
-        
-        setResults(pros);
+      } else {
+        // Recherche simple sans géolocalisation
+        const res = await fetch('/api/professionals');
+        if (res.ok) {
+          let pros = await res.json();
+          
+          if (query) {
+            pros = pros.filter((p) => 
+              p.category && p.category.toLowerCase().includes(String(query).toLowerCase())
+            );
+          }
+          
+          setResults(pros);
+        }
       }
     } catch (error) {
-      console.error('Erreur recherche simple:', error);
+      console.error('Erreur recherche:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAISearch = async () => {
-    setLoading(true);
-    setSearchMode('ai');
-    try {
-      const res = await fetch('/api/ai/semantic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: query || '',
-          category: query || '',
-          location: { lat: 48.8566, lng: 2.3522 }, // Paris par défaut
-          budgetMin: filters.budgetMin ? Number(filters.budgetMin) : null,
-          budgetMax: filters.budgetMax ? Number(filters.budgetMax) : null,
-          radiusKm: Number(filters.radiusKm),
-          limit: 20,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        // Adapter le format pour ProfessionalCard
-        const adaptedResults = (data.items || []).map(item => ({
-          id: item.id,
-          name: item.name,
-          category: item.categories?.[0] || '',
-          location: item.city,
-          description: item.bio,
-          ratingAvg: item.rating,
-          ratingCount: Math.floor(Math.random() * 50) + 10,
-          aiScore: item.score,
-        }));
-        setResults(adaptedResults);
-      }
-    } catch (error) {
-      console.error('Erreur recherche IA:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    handleSimpleSearch();
   };
 
   return (
     <div className="search-page">
-      {/* Search Header */}
       <div className="search-header">
         <div className="container">
-          <h1 className="search-title">Trouvez votre professionnel</h1>
+          <h1>Rechercher un professionnel</h1>
           
-          <form onSubmit={handleSubmit} className="search-form-advanced">
-            <div className="search-inputs-row">
-              <div className="search-input-wrapper">
-                <span className="input-icon">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Quel service ? (ex: plombier, électricien...)"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="search-input-main"
-                />
-              </div>
+          <div className="search-form">
+            <div className="search-row">
+              <input
+                type="text"
+                placeholder="Service recherché..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="search-input"
+              />
               
-              <div className="search-input-wrapper">
-                <span className="input-icon">📍</span>
+              <div className="location-input-group">
                 <input
                   type="text"
                   placeholder="Ville"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="search-input-main"
+                  className="search-input"
                 />
+                <button
+                  type="button"
+                  className="location-btn"
+                  onClick={getUserLocation}
+                  disabled={gettingLocation}
+                  title="Utiliser ma position"
+                >
+                  {gettingLocation ? '⌛' : '📍'}
+                </button>
               </div>
 
               <button 
-                type="submit" 
+                onClick={() => handleSearch()}
                 className="btn btn-primary"
                 disabled={loading}
               >
-                {loading ? <span className="loading"></span> : 'Rechercher'}
+                {loading ? 'Recherche...' : 'Rechercher'}
               </button>
             </div>
 
-            {/* Filtres avancés */}
-            <div className="search-filters">
-              <div className="filter-group">
-                <label>Budget minimum (€)</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={filters.budgetMin}
-                  onChange={(e) => setFilters({...filters, budgetMin: e.target.value})}
-                />
-              </div>
-
-              <div className="filter-group">
-                <label>Budget maximum (€)</label>
-                <input
-                  type="number"
-                  placeholder="1000"
-                  value={filters.budgetMax}
-                  onChange={(e) => setFilters({...filters, budgetMax: e.target.value})}
-                />
-              </div>
-
-              <div className="filter-group">
-                <label>Rayon (km)</label>
-                <input
-                  type="number"
-                  placeholder="25"
-                  value={filters.radiusKm}
-                  onChange={(e) => setFilters({...filters, radiusKm: e.target.value})}
-                />
-              </div>
-            </div>
-
-            {/* Bouton IA */}
-            <div className="ai-search-section">
-              <button 
-                type="button"
-                className="btn-ai-search"
-                onClick={handleAISearch}
-                disabled={loading}
+            {/* Filtres */}
+            <div className="filters-row">
+              <select 
+                value={filters.radiusKm}
+                onChange={(e) => setFilters({...filters, radiusKm: e.target.value})}
+                className="filter-select"
               >
-                <span className="ai-icon">✨</span>
-                <span>Recherche IA intelligente</span>
-                <span className="ai-badge">BETA</span>
-              </button>
-              <p className="ai-description">
-                Notre IA analyse votre besoin et trouve les meilleurs pros selon vos critères
-              </p>
+                <option value="5">5 km</option>
+                <option value="10">10 km</option>
+                <option value="25">25 km</option>
+                <option value="50">50 km</option>
+                <option value="100">100 km</option>
+              </select>
+
+              <select
+                value={filters.sortBy}
+                onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+                className="filter-select"
+              >
+                <option value="distance">Plus proche</option>
+                <option value="rating">Mieux notés</option>
+                <option value="price">Prix croissant</option>
+              </select>
+
+              <input
+                type="number"
+                placeholder="Budget min"
+                value={filters.budgetMin}
+                onChange={(e) => setFilters({...filters, budgetMin: e.target.value})}
+                className="filter-input"
+              />
+
+              <input
+                type="number"
+                placeholder="Budget max"
+                value={filters.budgetMax}
+                onChange={(e) => setFilters({...filters, budgetMax: e.target.value})}
+                className="filter-input"
+              />
             </div>
-          </form>
+          </div>
         </div>
       </div>
 
-      {/* Results Section */}
       <div className="container">
-        <div className="search-results-section">
-          {/* Results Header */}
-          {!loading && results.length > 0 && (
-            <div className="results-header">
-              <h2>
-                {results.length} professionnel{results.length > 1 ? 's' : ''} trouvé{results.length > 1 ? 's' : ''}
-              </h2>
-              {searchMode === 'ai' && (
-                <div className="ai-mode-badge">
-                  <span>✨</span> Résultats optimisés par IA
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Loading State */}
-          {loading && (
+        <div className="results-section">
+          {loading ? (
             <div className="loading-state">
               <div className="loading-spinner"></div>
-              <p>{searchMode === 'ai' ? 'IA en train d\'analyser...' : 'Recherche en cours...'}</p>
+              <p>Recherche en cours...</p>
             </div>
-          )}
-
-          {/* Empty State */}
-          {!loading && results.length === 0 && (query || city) && (
+          ) : results.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">🔍</div>
-              <h3>Aucun professionnel trouvé</h3>
-              <p>Essayez de modifier vos critères de recherche ou utilisez la recherche IA</p>
-              <button className="btn btn-accent" onClick={handleAISearch}>
-                ✨ Essayer la recherche IA
-              </button>
+              <h3>Aucun résultat</h3>
+              <p>Essayez d'élargir votre recherche ou de modifier vos filtres</p>
             </div>
-          )}
-
-          {/* Results Grid */}
-          {!loading && results.length > 0 && (
-            <div className="results-grid">
-              {results.map((pro) => (
-                <ProfessionalCard key={pro.id} professional={pro} />
-              ))}
-            </div>
+          ) : (
+            <>
+              <div className="results-header">
+                <h2>{results.length} professionnel(s) trouvé(s)</h2>
+                {userCoords && <span className="location-badge">📍 Près de vous</span>}
+              </div>
+              <div className="results-grid">
+                {results.map((pro) => (
+                  <ProfessionalCard key={pro.id} professional={pro} />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -246,257 +273,138 @@ export default function Search() {
       <style jsx>{`
         .search-page {
           min-height: 100vh;
+          background: var(--bg);
           padding-bottom: 80px;
         }
 
         .search-header {
-          background: linear-gradient(180deg, 
-            rgba(59, 130, 246, 0.05) 0%, 
-            transparent 100%
-          );
-          padding: 48px 0;
-          margin-bottom: 48px;
-        }
-
-        .search-title {
-          font-size: clamp(28px, 4vw, 42px);
-          font-weight: 800;
-          text-align: center;
-          margin-bottom: 32px;
-          letter-spacing: -0.02em;
-        }
-
-        .search-form-advanced {
-          max-width: 900px;
-          margin: 0 auto;
           background: white;
-          padding: 32px;
-          border-radius: 20px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
-          border: 1px solid var(--border);
-        }
-
-        .search-inputs-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr auto;
-          gap: 12px;
-          margin-bottom: 24px;
-        }
-
-        .search-input-wrapper {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .input-icon {
-          position: absolute;
-          left: 16px;
-          font-size: 20px;
-          pointer-events: none;
-        }
-
-        .search-input-main {
-          width: 100%;
-          height: 52px;
-          padding: 0 16px 0 48px;
-          border: 2px solid var(--border);
-          border-radius: 12px;
-          font-size: 15px;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }
-
-        .search-input-main:focus {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .search-filters {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
-          padding: 24px 0;
-          border-top: 1px solid var(--border);
           border-bottom: 1px solid var(--border);
+          padding: 40px 0;
+          margin-bottom: 40px;
         }
 
-        .filter-group {
+        h1 {
+          font-size: 32px;
+          font-weight: 700;
+          margin: 0 0 32px;
+        }
+
+        .search-form {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 16px;
         }
 
-        .filter-group label {
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--text-secondary);
-        }
-
-        .filter-group input {
-          height: 44px;
-          padding: 0 12px;
-          border: 2px solid var(--border);
-          border-radius: 10px;
-          font-size: 15px;
-          transition: all 0.2s ease;
-        }
-
-        .filter-group input:focus {
-          border-color: var(--accent);
-          outline: none;
-        }
-
-        .ai-search-section {
-          margin-top: 24px;
-          text-align: center;
-        }
-
-        .btn-ai-search {
-          display: inline-flex;
-          align-items: center;
+        .search-row {
+          display: grid;
+          grid-template-columns: 2fr 1.5fr auto;
           gap: 12px;
-          height: 56px;
-          padding: 0 32px;
-          background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-          color: white;
-          border: none;
-          border-radius: 14px;
-          font-size: 16px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+        }
+
+        .location-input-group {
           position: relative;
-          overflow: hidden;
+          display: flex;
+          align-items: center;
         }
 
-        .btn-ai-search::before {
-          content: '';
+        .location-btn {
           position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.2) 100%);
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .btn-ai-search:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(139, 92, 246, 0.4);
-        }
-
-        .btn-ai-search:hover::before {
-          opacity: 1;
-        }
-
-        .btn-ai-search:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        .ai-icon {
-          font-size: 24px;
-          animation: sparkle 2s ease-in-out infinite;
-        }
-
-        @keyframes sparkle {
-          0%, 100% { transform: scale(1) rotate(0deg); }
-          50% { transform: scale(1.2) rotate(180deg); }
-        }
-
-        .ai-badge {
-          font-size: 11px;
-          padding: 4px 8px;
-          background: rgba(255, 255, 255, 0.3);
+          right: 12px;
+          width: 32px;
+          height: 32px;
+          background: var(--bg-secondary);
+          border: none;
           border-radius: 6px;
-          font-weight: 800;
+          cursor: pointer;
+          transition: var(--transition);
+          font-size: 16px;
         }
 
-        .ai-description {
-          margin-top: 12px;
-          font-size: 13px;
-          color: var(--text-muted);
+        .location-btn:hover {
+          background: var(--border);
         }
 
-        .search-results-section {
-          margin-top: 48px;
+        .search-input {
+          height: 48px;
+          padding: 0 16px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          font-size: 15px;
+        }
+
+        .location-input-group .search-input {
+          padding-right: 50px;
+        }
+
+        .filters-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+        }
+
+        .filter-select,
+        .filter-input {
+          height: 40px;
+          padding: 0 12px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius);
+          font-size: 14px;
+          background: white;
         }
 
         .results-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: 32px;
-          padding-bottom: 24px;
-          border-bottom: 2px solid var(--border);
+          margin-bottom: 24px;
         }
 
         .results-header h2 {
-          font-size: 28px;
-          font-weight: 700;
+          font-size: 20px;
+          font-weight: 600;
           margin: 0;
         }
 
-        .ai-mode-badge {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 20px;
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.1) 100%);
-          border: 2px solid rgba(139, 92, 246, 0.3);
-          border-radius: 999px;
+        .location-badge {
+          padding: 6px 12px;
+          background: var(--success);
+          color: white;
+          border-radius: 6px;
+          font-size: 13px;
           font-weight: 600;
-          font-size: 14px;
-          color: #8b5cf6;
         }
 
-        .loading-state {
-          text-align: center;
-          padding: 80px 20px;
-        }
-
-        .loading-spinner {
-          width: 60px;
-          height: 60px;
-          margin: 0 auto 24px;
-          border: 4px solid var(--border);
-          border-top-color: var(--accent);
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-
-        .loading-state p {
-          font-size: 18px;
-          color: var(--text-secondary);
-          font-weight: 500;
-        }
-
+        .loading-state,
         .empty-state {
           text-align: center;
           padding: 80px 20px;
         }
 
+        .loading-spinner {
+          width: 50px;
+          height: 50px;
+          margin: 0 auto 24px;
+          border: 3px solid var(--border);
+          border-top-color: var(--primary);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
         .empty-icon {
-          font-size: 80px;
-          margin-bottom: 24px;
+          font-size: 64px;
+          margin-bottom: 20px;
           opacity: 0.5;
         }
 
         .empty-state h3 {
-          font-size: 24px;
-          font-weight: 700;
-          margin: 0 0 12px;
+          font-size: 20px;
+          margin: 0 0 8px;
         }
 
         .empty-state p {
-          font-size: 16px;
           color: var(--text-secondary);
-          margin: 0 0 32px;
+          margin: 0;
         }
 
         .results-grid {
@@ -506,18 +414,12 @@ export default function Search() {
         }
 
         @media (max-width: 768px) {
-          .search-inputs-row {
+          .search-row {
             grid-template-columns: 1fr;
           }
 
-          .search-filters {
-            grid-template-columns: 1fr;
-          }
-
-          .results-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 16px;
+          .filters-row {
+            grid-template-columns: 1fr 1fr;
           }
 
           .results-grid {
