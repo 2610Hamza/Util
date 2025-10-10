@@ -5,6 +5,7 @@ export default function Hero() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
+  const [focused, setFocused] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -16,163 +17,181 @@ export default function Hero() {
     }
   };
 
-  const popularSearches = [
-    { icon: '🔧', label: 'Plombier', value: 'plomberie' },
-    { icon: '⚡', label: 'Électricien', value: 'electricite' },
-    { icon: '💻', label: 'Informatique', value: 'informatique' },
-    { icon: '🧹', label: 'Ménage', value: 'menage' },
+  const quickSearches = [
+    { icon: '🔧', text: 'Plombier', cat: 'plomberie' },
+    { icon: '⚡', text: 'Électricien', cat: 'electricite' },
+    { icon: '💻', text: 'Informatique', cat: 'informatique' },
+    { icon: '🧹', text: 'Ménage', cat: 'menage' },
   ];
 
   return (
-    <section className="hero">
-      <div className="hero-background">
-        <div className="hero-gradient hero-gradient-1"></div>
-        <div className="hero-gradient hero-gradient-2"></div>
-      </div>
+    <section className="hero-modern">
+      <div className="hero-bg-gradient"></div>
+      <div className="hero-bg-pattern"></div>
+      
+      <div className="hero-content">
+        <div className="hero-badges">
+          <span className="badge badge-success">
+            <span className="pulse-dot"></span>
+            10,000+ pros actifs
+          </span>
+          <span className="badge">
+            ⚡ Commission 12% seulement
+          </span>
+        </div>
 
-      <div className="container">
-        <div className="hero-content">
-          <div className="hero-badges">
-            <span className="badge badge-success">
-              <span className="pulse-dot"></span>
-              10,000+ professionnels actifs
-            </span>
-            <span className="badge">
-              ⚡ Commission 12% uniquement
-            </span>
-          </div>
+        <h1 className="hero-title">
+          Trouvez le professionnel
+          <br />
+          <span className="gradient-text">parfait</span> en 2 minutes
+        </h1>
 
-          <h1>
-            Trouvez le professionnel
-            <br />
-            <span className="gradient-text">parfait</span> en quelques clics
-          </h1>
+        <p className="hero-subtitle">
+          IA, devis instantanés, paiement sécurisé. Plus de 10,000 professionnels 
+          vérifiés prêts à intervenir près de chez vous.
+        </p>
 
-          <p className="hero-subtitle">
-            Des milliers de professionnels vérifiés près de chez vous.
-            Devis instantanés, paiement sécurisé, satisfaction garantie.
-          </p>
-
-          <form onSubmit={handleSubmit} className="search-bar">
-            <div className="search-wrapper">
-              <div className="search-group">
-                <span className="search-icon">🔍</span>
-                <input
-                  type="text"
-                  placeholder="Quel service recherchez-vous ?"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="search-input"
-                />
-              </div>
-              
-              <div className="search-divider"></div>
-              
-              <div className="search-group">
-                <span className="search-icon">📍</span>
-                <input
-                  type="text"
-                  placeholder="Votre ville"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="search-input"
-                />
-              </div>
+        {/* Search Bar Améliorée */}
+        <form onSubmit={handleSubmit} className={`search-bar-modern ${focused ? 'focused' : ''}`}>
+          <div className="search-inputs">
+            <div className="search-input-group">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                placeholder="Quel service cherchez-vous ?"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                className="search-input"
+              />
             </div>
+            
+            <div className="search-divider"></div>
+            
+            <div className="search-input-group">
+              <span className="search-icon">📍</span>
+              <input
+                type="text"
+                placeholder="Votre ville"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                className="search-input"
+              />
+            </div>
+          </div>
+          
+          <button type="submit" className="btn btn-primary btn-search">
+            Rechercher
+          </button>
+        </form>
 
-            <button type="submit" className="btn btn-primary btn-lg search-btn">
-              Rechercher
-            </button>
-          </form>
-
-          <div className="popular-searches">
-            <span className="popular-label">Recherches populaires :</span>
-            {popularSearches.map((item, i) => (
+        {/* Recherches rapides */}
+        <div className="quick-searches">
+          <span className="quick-label">Recherches populaires :</span>
+          <div className="quick-buttons">
+            {quickSearches.map((item, i) => (
               <button
                 key={i}
-                onClick={() => router.push(`/search?category=${item.value}`)}
-                className="popular-btn"
+                onClick={() => router.push(`/search?category=${item.cat}`)}
+                className="quick-btn"
               >
                 <span>{item.icon}</span>
-                {item.label}
+                {item.text}
               </button>
             ))}
           </div>
+        </div>
 
-          <div className="hero-stats">
-            <div className="stat">
-              <div className="stat-value">10k+</div>
-              <div className="stat-label">Professionnels</div>
+        {/* Trust Indicators */}
+        <div className="trust-indicators">
+          <div className="trust-item">
+            <div className="trust-icon">✅</div>
+            <div className="trust-text">
+              <strong>Pros vérifiés</strong>
+              <span>Identité et diplômes contrôlés</span>
             </div>
-            <div className="stat">
-              <div className="stat-value">4.8★</div>
-              <div className="stat-label">Note moyenne</div>
+          </div>
+          <div className="trust-item">
+            <div className="trust-icon">🔒</div>
+            <div className="trust-text">
+              <strong>Paiement sécurisé</strong>
+              <span>Fonds bloqués jusqu'à validation</span>
             </div>
-            <div className="stat">
-              <div className="stat-value">24/7</div>
-              <div className="stat-label">Support</div>
+          </div>
+          <div className="trust-item">
+            <div className="trust-icon">⚡</div>
+            <div className="trust-text">
+              <strong>Réponse rapide</strong>
+              <span>Devis sous 24h en moyenne</span>
             </div>
           </div>
         </div>
       </div>
 
       <style jsx>{`
-        .hero {
+        .hero-modern {
           position: relative;
-          padding: 80px 0 120px;
+          min-height: 85vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           overflow: hidden;
-          background: white;
+          padding: 60px 20px;
         }
 
-        .hero-background {
+        .hero-bg-gradient {
           position: absolute;
           inset: 0;
-          overflow: hidden;
+          background: radial-gradient(ellipse 80% 50% at 50% -20%, 
+            rgba(59, 130, 246, 0.15), 
+            transparent 60%),
+            radial-gradient(ellipse 60% 50% at 80% 50%, 
+            rgba(139, 92, 246, 0.1), 
+            transparent 60%);
+          animation: gradientShift 15s ease infinite;
         }
 
-        .hero-gradient {
+        @keyframes gradientShift {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.1); }
+        }
+
+        .hero-bg-pattern {
           position: absolute;
-          border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.3;
-          animation: float 20s ease-in-out infinite;
+          inset: 0;
+          background-image: 
+            radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.05) 1px, transparent 1px),
+            radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+          background-size: 50px 50px;
+          animation: patternFloat 20s linear infinite;
         }
 
-        .hero-gradient-1 {
-          width: 600px;
-          height: 600px;
-          background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-          top: -200px;
-          left: -100px;
-        }
-
-        .hero-gradient-2 {
-          width: 500px;
-          height: 500px;
-          background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
-          bottom: -150px;
-          right: -100px;
-          animation-delay: -10s;
-        }
-
-        @keyframes float {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
-          }
-          33% {
-            transform: translate(30px, -30px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
+        @keyframes patternFloat {
+          0% { background-position: 0 0; }
+          100% { background-position: 50px 50px; }
         }
 
         .hero-content {
           position: relative;
           z-index: 1;
           max-width: 900px;
-          margin: 0 auto;
+          width: 100%;
           text-align: center;
+          animation: fadeInUp 0.8s ease-out;
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .hero-badges {
@@ -181,7 +200,7 @@ export default function Hero() {
           justify-content: center;
           flex-wrap: wrap;
           margin-bottom: 32px;
-          animation: fadeInUp 0.6s ease 0.1s both;
+          animation: fadeInUp 0.8s ease-out 0.2s both;
         }
 
         .pulse-dot {
@@ -195,66 +214,73 @@ export default function Hero() {
         }
 
         @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 0.5;
-            transform: scale(1.2);
-          }
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.2); }
         }
 
-        h1 {
-          font-size: clamp(40px, 6vw, 64px);
+        .hero-title {
+          font-size: clamp(40px, 6vw, 72px);
           font-weight: 900;
           line-height: 1.1;
-          letter-spacing: -0.04em;
+          letter-spacing: -0.03em;
           margin: 0 0 24px;
-          animation: fadeInUp 0.6s ease 0.2s both;
+          animation: fadeInUp 0.8s ease-out 0.3s both;
+        }
+
+        .gradient-text {
+          background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          background-size: 200% auto;
+          animation: gradientFlow 3s linear infinite;
+        }
+
+        @keyframes gradientFlow {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
         }
 
         .hero-subtitle {
           font-size: clamp(16px, 2vw, 20px);
           color: var(--text-secondary);
           line-height: 1.6;
-          margin: 0 0 48px;
+          margin: 0 auto 48px;
           max-width: 700px;
-          margin-left: auto;
-          margin-right: auto;
-          animation: fadeInUp 0.6s ease 0.3s both;
+          animation: fadeInUp 0.8s ease-out 0.4s both;
         }
 
-        .search-bar {
-          display: flex;
-          gap: 12px;
+        .search-bar-modern {
           background: white;
-          border: 2px solid var(--border);
           border-radius: 16px;
           padding: 8px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+          display: flex;
+          gap: 8px;
+          align-items: stretch;
+          transition: all 0.3s ease;
+          animation: fadeInUp 0.8s ease-out 0.5s both;
           margin-bottom: 32px;
-          transition: var(--transition);
-          animation: fadeInUp 0.6s ease 0.4s both;
         }
 
-        .search-bar:focus-within {
-          border-color: var(--accent);
-          box-shadow: 0 20px 60px rgba(59, 130, 246, 0.15);
+        .search-bar-modern.focused {
+          box-shadow: 0 25px 70px rgba(59, 130, 246, 0.2);
+          transform: translateY(-2px);
         }
 
-        .search-wrapper {
+        .search-inputs {
           flex: 1;
           display: flex;
           align-items: center;
+          gap: 0;
         }
 
-        .search-group {
+        .search-input-group {
           flex: 1;
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 0 16px;
+          padding: 0 20px;
         }
 
         .search-icon {
@@ -264,17 +290,13 @@ export default function Hero() {
 
         .search-input {
           flex: 1;
-          height: 56px;
           border: none;
           background: transparent;
           font-size: 16px;
           font-weight: 500;
           color: var(--text);
-          padding: 0;
-        }
-
-        .search-input:focus {
           outline: none;
+          height: 56px;
         }
 
         .search-input::placeholder {
@@ -287,126 +309,141 @@ export default function Hero() {
           background: var(--border);
         }
 
-        .search-btn {
+        .btn-search {
           height: 56px;
           padding: 0 40px;
+          font-size: 16px;
+          font-weight: 700;
           white-space: nowrap;
-          flex-shrink: 0;
+          border-radius: 12px;
         }
 
-        .popular-searches {
+        .quick-searches {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 12px;
           flex-wrap: wrap;
-          margin-bottom: 64px;
-          animation: fadeInUp 0.6s ease 0.5s both;
+          margin-bottom: 48px;
+          animation: fadeInUp 0.8s ease-out 0.6s both;
         }
 
-        .popular-label {
+        .quick-label {
           font-size: 14px;
-          font-weight: 600;
-          color: var(--text-secondary);
+          color: var(--text-muted);
+          font-weight: 500;
         }
 
-        .popular-btn {
+        .quick-buttons {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .quick-btn {
           display: flex;
           align-items: center;
           gap: 6px;
           padding: 8px 16px;
           background: white;
           border: 1px solid var(--border);
-          border-radius: var(--radius-full);
+          border-radius: 999px;
           font-size: 14px;
           font-weight: 600;
           color: var(--text);
           cursor: pointer;
-          transition: var(--transition);
+          transition: all 0.2s ease;
         }
 
-        .popular-btn:hover {
-          background: var(--accent);
-          color: white;
+        .quick-btn:hover {
           border-color: var(--accent);
+          color: var(--accent);
           transform: translateY(-2px);
-          box-shadow: var(--shadow);
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
         }
 
-        .hero-stats {
+        .trust-indicators {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 48px;
-          max-width: 600px;
-          margin: 0 auto;
-          animation: fadeInUp 0.6s ease 0.6s both;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 24px;
+          animation: fadeInUp 0.8s ease-out 0.7s both;
         }
 
-        .stat {
-          text-align: center;
+        .trust-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          text-align: left;
+          padding: 20px;
+          background: rgba(255, 255, 255, 0.5);
+          backdrop-filter: blur(10px);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          transition: all 0.3s ease;
         }
 
-        .stat-value {
-          font-size: 36px;
-          font-weight: 800;
-          background: var(--gradient-accent);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-          margin-bottom: 8px;
+        .trust-item:hover {
+          background: white;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+          transform: translateY(-4px);
         }
 
-        .stat-label {
-          font-size: 14px;
+        .trust-icon {
+          font-size: 32px;
+          flex-shrink: 0;
+        }
+
+        .trust-text {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .trust-text strong {
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--text);
+        }
+
+        .trust-text span {
+          font-size: 13px;
           color: var(--text-secondary);
-          font-weight: 600;
-        }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
         }
 
         @media (max-width: 768px) {
-          .hero {
-            padding: 48px 0 80px;
+          .hero-modern {
+            min-height: auto;
+            padding: 40px 16px;
           }
 
-          .search-bar {
+          .search-bar-modern {
             flex-direction: column;
           }
 
-          .search-wrapper {
+          .search-inputs {
             flex-direction: column;
+            width: 100%;
           }
 
           .search-divider {
-            width: 100%;
-            height: 1px;
+            display: none;
           }
 
-          .search-btn {
+          .btn-search {
             width: 100%;
           }
 
-          .popular-searches {
+          .trust-indicators {
+            grid-template-columns: 1fr;
+          }
+
+          .quick-searches {
             flex-direction: column;
             align-items: stretch;
           }
 
-          .popular-btn {
+          .quick-buttons {
             justify-content: center;
-          }
-
-          .hero-stats {
-            grid-template-columns: 1fr;
-            gap: 32px;
           }
         }
       `}</style>
