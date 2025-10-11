@@ -1,563 +1,314 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { supabase } from '../../lib/supabaseClient';
 
 export default function ClientDashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    completed: 0
+  });
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    const stored = localStorage.getItem('util_user');
-    if (!stored) {
+    const userData = localStorage.getItem('util_user');
+    if (!userData) {
       router.push('/login');
       return;
     }
     
-    const u = JSON.parse(stored);
-    if (u.role !== 'client') {
-      router.push('/');
+    const parsedUser = JSON.parse(userData);
+    if (parsedUser.role !== 'client') {
+      router.push('/dashboard/provider');
       return;
     }
     
-    setUser(u);
-    fetchRequests(u.id);
-  }, [router]);
+    setUser(parsedUser);
+  }, []);
 
-  const fetchRequests = async (userId) => {
+  useEffect(() => {
+    if (user) {
+      fetchRequests();
+      const interval = setInterval(fetchRequests, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  const fetchRequests = async () => {
     try {
-      const res = await fetch(`/api/requests?clientId=${userId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRequests(data);
-      }
+      const { data, error } = await supabase
+        .from('requests')
+        .select('*')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setRequests(data || []);
+      
+      setStats({
+        total: data?.length || 0,
+        pending: data?.filter(r => r.status === 'pending' || r.status === 'quote_received').length || 0,
+        inProgress: data?.filter(r => r.status === 'accepted').length || 0,
+        completed: data?.filter(r => r.status === 'completed').length || 0,
+      });
     } catch (error) {
-      console.error('Erreur chargement demandes:', error);
+      console.error('Erreur:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const getFilteredRequests = () => {
+    if (filter === 'all') return requests;
+    if (filter === 'pending') return requests.filter(r => r.status === 'pending' || r.status === 'quote_received');
+    if (filter === 'accepted') return requests.filter(r => r.status === 'accepted');
+    if (filter === 'completed') return requests.filter(r => r.status === 'completed');
+    return requests;
+  };
+
   const getStatusBadge = (status) => {
     const badges = {
-      pending: { label: 'En attente', color: '#f59e0b' },
-      quote_received: { label: 'Devis reçu', color: '#3b82f6' },
-      accepted: { label: 'Accepté', color: '#10b981' },
-      completed: { label: 'Terminé', color: '#6366f1' },
+      pending: { text: '⏳ En attente', class: 'status-pending' },
+      quote_received: { text: '💬 Devis reçus', class: 'status-quote' },
+      accepted: { text: '✅ En cours', class: 'status-accepted' },
+      completed: { text: '🎉 Terminé', class: 'status-completed' },
+      cancelled: { text: '❌ Annulé', class: 'status-cancelled' },
     };
     return badges[status] || badges.pending;
   };
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="loading-spinner"></div>
-        <p>Chargement...</p>
+      <div className="dashboard-page">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Chargement de votre espace...</p>
+        </div>
+        <style jsx>{`
+          .dashboard-page { min-height: 100vh; background: #f9fafb; padding: 48px 0; }
+          .loading-state { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
+          .loading-spinner { width: 50px; height: 50px; border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
       </div>
     );
   }
 
+  const filteredRequests = getFilteredRequests();
+
   return (
     <div className="dashboard-page">
-      {/* Header */}
-      <div className="dashboard-header">
-        <div className="container">
-          <div className="header-content">
-            <div>
-              <h1>Bonjour, {user?.name} 👋</h1>
-              <p>Gérez vos demandes et trouvez des professionnels</p>
+      <div className="container">
+        <div className="dashboard-header">
+          <div>
+            <h1>Bonjour {user?.name} 👋</h1>
+            <p className="subtitle">Gérez vos demandes de services</p>
+          </div>
+          <Link href="/search" className="btn btn-primary">
+            ➕ Nouvelle demande
+          </Link>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-icon">📊</div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.total}</div>
+              <div className="stat-label">Total demandes</div>
             </div>
-            <Link href="/search" className="btn btn-primary">
-              🔍 Trouver un pro
-            </Link>
+          </div>
+
+          <div className="stat-card highlight">
+            <div className="stat-icon">⏳</div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.pending}</div>
+              <div className="stat-label">En attente</div>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">🔄</div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.inProgress}</div>
+              <div className="stat-label">En cours</div>
+            </div>
+          </div>
+
+          <div className="stat-card success">
+            <div className="stat-icon">✅</div>
+            <div className="stat-content">
+              <div className="stat-value">{stats.completed}</div>
+              <div className="stat-label">Terminées</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="container">
-        <div className="dashboard-content">
-          {/* Stats Cards */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' }}>
-                📋
-              </div>
-              <div className="stat-info">
-                <div className="stat-value">{requests.length}</div>
-                <div className="stat-label">Demandes totales</div>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' }}>
-                ⏳
-              </div>
-              <div className="stat-info">
-                <div className="stat-value">
-                  {requests.filter(r => r.status === 'pending' || r.status === 'quote_received').length}
-                </div>
-                <div className="stat-label">En cours</div>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}>
-                ✅
-              </div>
-              <div className="stat-info">
-                <div className="stat-value">
-                  {requests.filter(r => r.status === 'completed').length}
-                </div>
-                <div className="stat-label">Terminées</div>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon" style={{ background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' }}>
-                💬
-              </div>
-              <div className="stat-info">
-                <div className="stat-value">
-                  {requests.filter(r => r.status === 'quote_received').length}
-                </div>
-                <div className="stat-label">Devis reçus</div>
-              </div>
-            </div>
+        <div className="filters-bar">
+          <div className="filters">
+            <button 
+              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+              onClick={() => setFilter('all')}
+            >
+              Toutes ({requests.length})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'pending' ? 'active' : ''}`}
+              onClick={() => setFilter('pending')}
+            >
+              En attente ({stats.pending})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'accepted' ? 'active' : ''}`}
+              onClick={() => setFilter('accepted')}
+            >
+              En cours ({stats.inProgress})
+            </button>
+            <button 
+              className={`filter-btn ${filter === 'completed' ? 'active' : ''}`}
+              onClick={() => setFilter('completed')}
+            >
+              Terminées ({stats.completed})
+            </button>
           </div>
+        </div>
 
-          {/* Quick Actions */}
-          <div className="quick-actions">
-            <h2>Actions rapides</h2>
-            <div className="actions-grid">
-              <Link href="/search" className="action-card">
-                <div className="action-icon">🔍</div>
-                <div>
-                  <h3>Rechercher un pro</h3>
-                  <p>Trouvez le professionnel parfait</p>
-                </div>
-                <span className="action-arrow">→</span>
-              </Link>
-
-              <Link href="/categories" className="action-card">
-                <div className="action-icon">📂</div>
-                <div>
-                  <h3>Parcourir les catégories</h3>
-                  <p>Explorez tous les services</p>
-                </div>
-                <span className="action-arrow">→</span>
-              </Link>
-
-              <Link href="/ai" className="action-card ai-card">
-                <div className="action-icon">✨</div>
-                <div>
-                  <h3>Recherche IA</h3>
-                  <p>Matching intelligent par IA</p>
-                </div>
-                <span className="action-arrow">→</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Requests List */}
-          <div className="requests-section">
-            <div className="section-header">
-              <h2>Mes demandes</h2>
-              {requests.length > 0 && (
-                <span className="requests-count">{requests.length} demande(s)</span>
+        <div className="requests-section">
+          {filteredRequests.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <h3>Aucune demande</h3>
+              <p>
+                {filter === 'all' 
+                  ? "Vous n'avez pas encore créé de demande"
+                  : `Aucune demande ${filter === 'pending' ? 'en attente' : filter === 'accepted' ? 'en cours' : 'terminée'}`
+                }
+              </p>
+              {filter === 'all' && (
+                <Link href="/search" className="btn btn-primary">
+                  Créer ma première demande
+                </Link>
               )}
             </div>
+          ) : (
+            <div className="requests-grid">
+              {filteredRequests.map((request) => {
+                const badge = getStatusBadge(request.status);
+                const daysAgo = Math.floor((new Date() - new Date(request.created_at)) / (1000 * 60 * 60 * 24));
+                
+                return (
+                  <div key={request.id} className="request-card">
+                    <div className="request-header">
+                      <h3>{request.title}</h3>
+                      <span className={`status-badge ${badge.class}`}>
+                        {badge.text}
+                      </span>
+                    </div>
 
-            {requests.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📭</div>
-                <h3>Aucune demande pour le moment</h3>
-                <p>Commencez par rechercher un professionnel pour votre projet</p>
-                <Link href="/search" className="btn btn-primary">
-                  🔍 Trouver un professionnel
-                </Link>
-              </div>
-            ) : (
-              <div className="requests-list">
-                {requests.map((request) => {
-                  const statusBadge = getStatusBadge(request.status);
-                  return (
-                    <div key={request.id} className="request-card">
-                      <div className="request-header">
-                        <div>
-                          <h3>{request.title}</h3>
-                          <p className="request-date">
-                            📅 {new Date(request.createdAt).toLocaleDateString('fr-FR', {
-                              day: 'numeric',
-                              month: 'long',
-                              year: 'numeric'
-                            })}
-                          </p>
-                        </div>
-                        <span 
-                          className="status-badge" 
-                          style={{ background: `${statusBadge.color}22`, color: statusBadge.color }}
-                        >
-                          {statusBadge.label}
+                    <p className="request-description">
+                      {request.description.length > 120 
+                        ? request.description.substring(0, 120) + '...'
+                        : request.description
+                      }
+                    </p>
+
+                    <div className="request-meta">
+                      <div className="meta-item">
+                        <span className="meta-icon">📅</span>
+                        <span className="meta-text">
+                          {daysAgo === 0 ? "Aujourd'hui" : `Il y a ${daysAgo}j`}
                         </span>
                       </div>
-
-                      <p className="request-description">{request.description}</p>
-
                       {request.budget && (
-                        <div className="request-budget">
-                          💰 Budget estimé : <strong>{request.budget}€</strong>
+                        <div className="meta-item">
+                          <span className="meta-icon">💰</span>
+                          <span className="meta-text">{request.budget}€</span>
                         </div>
                       )}
+                      {request.professional_name && (
+                        <div className="meta-item">
+                          <span className="meta-icon">👤</span>
+                          <span className="meta-text">{request.professional_name}</span>
+                        </div>
+                      )}
+                    </div>
 
-                      <div className="request-footer">
+                    <div className="request-actions">
+                      <Link 
+                        href={`/requests/${request.id}/tracking`}
+                        className="btn btn-ghost btn-sm"
+                      >
+                        📊 Voir détails
+                      </Link>
+                      
+                      {(request.status === 'accepted' || request.status === 'completed') && (
                         <Link 
-                          href={`/requests/${request.id}`}
+                          href={`/messages/${request.id}`}
                           className="btn btn-ghost btn-sm"
                         >
-                          Voir les détails
+                          💬 Messagerie
                         </Link>
-                        
-                        {request.status === 'quote_received' && (
-                          <Link 
-                            href={`/requests/${request.id}/quotes`}
-                            className="btn btn-primary btn-sm"
-                          >
-                            💬 Voir les devis
-                          </Link>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       <style jsx>{`
-        .dashboard-page {
-          min-height: 100vh;
-          background: var(--bg);
-          padding-bottom: 80px;
-        }
-
-        .dashboard-loading {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-        }
-
-        .loading-spinner {
-          width: 50px;
-          height: 50px;
-          border: 4px solid var(--border);
-          border-top-color: var(--accent);
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        .dashboard-header {
-          background: linear-gradient(135deg, 
-            rgba(59, 130, 246, 0.05) 0%, 
-            rgba(139, 92, 246, 0.05) 100%
-          );
-          padding: 48px 0;
-          margin-bottom: 48px;
-          border-bottom: 1px solid var(--border);
-        }
-
-        .header-content {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 24px;
-        }
-
-        .header-content h1 {
-          font-size: clamp(28px, 4vw, 42px);
-          font-weight: 800;
-          margin: 0 0 8px;
-          letter-spacing: -0.02em;
-        }
-
-        .header-content p {
-          font-size: 16px;
-          color: var(--text-secondary);
-          margin: 0;
-        }
-
-        .dashboard-content {
-          display: flex;
-          flex-direction: column;
-          gap: 48px;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 24px;
-        }
-
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 24px;
-          background: white;
-          border: 2px solid var(--border);
-          border-radius: 16px;
-          transition: all 0.3s ease;
-        }
-
-        .stat-card:hover {
-          border-color: var(--border-hover);
-          transform: translateY(-4px);
-          box-shadow: var(--shadow-lg);
-        }
-
-        .stat-icon {
-          width: 56px;
-          height: 56px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 28px;
-          flex-shrink: 0;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-info {
-          flex: 1;
-        }
-
-        .stat-value {
-          font-size: 32px;
-          font-weight: 800;
-          color: var(--text);
-          line-height: 1;
-          margin-bottom: 6px;
-        }
-
-        .stat-label {
-          font-size: 14px;
-          color: var(--text-secondary);
-          font-weight: 500;
-        }
-
-        .quick-actions h2,
-        .section-header h2 {
-          font-size: 24px;
-          font-weight: 700;
-          margin-bottom: 24px;
-        }
-
-        .actions-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 20px;
-        }
-
-        .action-card {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 24px;
-          background: white;
-          border: 2px solid var(--border);
-          border-radius: 16px;
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-
-        .action-card:hover {
-          border-color: var(--accent);
-          transform: translateY(-4px);
-          box-shadow: var(--shadow-lg);
-        }
-
-        .action-card.ai-card {
-          background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(236, 72, 153, 0.05) 100%);
-          border-color: rgba(139, 92, 246, 0.3);
-        }
-
-        .action-icon {
-          font-size: 40px;
-          flex-shrink: 0;
-        }
-
-        .action-card h3 {
-          font-size: 16px;
-          font-weight: 700;
-          margin: 0 0 4px;
-          color: var(--text);
-        }
-
-        .action-card p {
-          font-size: 13px;
-          color: var(--text-secondary);
-          margin: 0;
-        }
-
-        .action-arrow {
-          font-size: 24px;
-          color: var(--text-muted);
-          margin-left: auto;
-          transition: all 0.2s ease;
-        }
-
-        .action-card:hover .action-arrow {
-          transform: translateX(4px);
-          color: var(--accent);
-        }
-
-        .section-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 24px;
-        }
-
-        .requests-count {
-          font-size: 14px;
-          color: var(--text-muted);
-          font-weight: 600;
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 80px 20px;
-          background: white;
-          border: 2px dashed var(--border);
-          border-radius: 16px;
-        }
-
-        .empty-icon {
-          font-size: 80px;
-          margin-bottom: 24px;
-          opacity: 0.5;
-        }
-
-        .empty-state h3 {
-          font-size: 24px;
-          font-weight: 700;
-          margin: 0 0 12px;
-        }
-
-        .empty-state p {
-          font-size: 16px;
-          color: var(--text-secondary);
-          margin: 0 0 32px;
-        }
-
-        .requests-list {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .request-card {
-          background: white;
-          border: 2px solid var(--border);
-          border-radius: 16px;
-          padding: 24px;
-          transition: all 0.3s ease;
-        }
-
-        .request-card:hover {
-          border-color: var(--border-hover);
-          box-shadow: var(--shadow-lg);
-        }
-
-        .request-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-
-        .request-header h3 {
-          font-size: 20px;
-          font-weight: 700;
-          margin: 0 0 8px;
-          color: var(--text);
-        }
-
-        .request-date {
-          font-size: 14px;
-          color: var(--text-muted);
-          margin: 0;
-        }
-
-        .status-badge {
-          padding: 8px 16px;
-          border-radius: 999px;
-          font-size: 13px;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        .request-description {
-          font-size: 15px;
-          color: var(--text-secondary);
-          line-height: 1.6;
-          margin: 0 0 16px;
-        }
-
-        .request-budget {
-          font-size: 14px;
-          color: var(--text-secondary);
-          margin-bottom: 20px;
-          padding: 12px 16px;
-          background: rgba(16, 185, 129, 0.05);
-          border-radius: 10px;
-        }
-
-        .request-budget strong {
-          color: var(--success);
-          font-weight: 700;
-        }
-
-        .request-footer {
-          display: flex;
-          gap: 12px;
-          padding-top: 20px;
-          border-top: 1px solid var(--border);
-        }
-
-        @media (max-width: 1024px) {
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .actions-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .header-content {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .request-header {
-            flex-direction: column;
-          }
-
-          .request-footer {
-            flex-direction: column;
-          }
+        .dashboard-page { min-height: 100vh; background: #f9fafb; padding: 48px 0 80px; }
+        .dashboard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; gap: 24px; }
+        .dashboard-header h1 { font-size: 32px; font-weight: 800; margin: 0 0 8px; }
+        .subtitle { font-size: 16px; color: #6b7280; margin: 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 32px; }
+        .stat-card { background: white; border: 2px solid #e5e7eb; border-radius: 16px; padding: 24px; display: flex; align-items: center; gap: 20px; transition: all 0.3s; }
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        .stat-card.highlight { background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%); border-color: rgba(59, 130, 246, 0.3); }
+        .stat-card.success { background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%); border-color: rgba(16, 185, 129, 0.3); }
+        .stat-icon { width: 56px; height: 56px; background: #f9fafb; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
+        .stat-value { font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+        .stat-label { font-size: 14px; color: #6b7280; font-weight: 600; }
+        .filters-bar { background: white; border: 2px solid #e5e7eb; border-radius: 16px; padding: 20px; margin-bottom: 32px; }
+        .filters { display: flex; gap: 12px; flex-wrap: wrap; }
+        .filter-btn { padding: 10px 20px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 999px; font-weight: 600; font-size: 14px; color: #6b7280; cursor: pointer; transition: all 0.2s; }
+        .filter-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+        .filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: white; }
+        .empty-state { background: white; border: 2px solid #e5e7eb; border-radius: 20px; padding: 80px 40px; text-align: center; }
+        .empty-icon { font-size: 80px; margin-bottom: 24px; opacity: 0.5; }
+        .empty-state h3 { font-size: 24px; font-weight: 700; margin: 0 0 12px; }
+        .empty-state p { font-size: 16px; color: #6b7280; margin: 0 0 24px; }
+        .requests-grid { display: grid; gap: 20px; }
+        .request-card { background: white; border: 2px solid #e5e7eb; border-radius: 16px; padding: 24px; transition: all 0.3s; }
+        .request-card:hover { border-color: #3b82f6; box-shadow: 0 10px 40px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .request-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+        .request-header h3 { font-size: 20px; font-weight: 700; margin: 0; flex: 1; }
+        .status-badge { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+        .status-pending { background: rgba(251, 191, 36, 0.1); color: #f59e0b; border: 1px solid rgba(251, 191, 36, 0.3); }
+        .status-quote { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .status-accepted { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .status-completed { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .request-description { font-size: 15px; color: #6b7280; line-height: 1.6; margin: 0 0 16px; }
+        .request-meta { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px 0; border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+        .meta-item { display: flex; align-items: center; gap: 8px; }
+        .meta-icon { font-size: 16px; }
+        .meta-text { font-size: 14px; color: #6b7280; font-weight: 600; }
+        .request-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        @media (max-width: 768px) {
+          .dashboard-header { flex-direction: column; align-items: flex-start; }
+          .stats-grid { grid-template-columns: 1fr; }
+          .filters { flex-direction: column; }
+          .filter-btn { width: 100%; }
+          .request-header { flex-direction: column; }
+          .request-actions { flex-direction: column; }
         }
       `}</style>
     </div>
