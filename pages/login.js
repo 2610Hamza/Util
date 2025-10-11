@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { supabase } from '../lib/supabaseClient';
 
 export default function Login() {
   const router = useRouter();
@@ -17,32 +18,39 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+      // Chercher l'utilisateur dans Supabase
+      const { data: user, error: loginError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', formData.email)
+        .eq('password', formData.password)
+        .single();
 
-      const data = await res.json();
+      if (loginError || !user) {
+        setError('Email ou mot de passe incorrect');
+        setLoading(false);
+        return;
+      }
 
-      if (res.ok) {
-        // Sauvegarder l'utilisateur dans localStorage
-        localStorage.setItem('util_user', JSON.stringify(data.user));
-        
-        // Rediriger selon le rôle
-        if (data.user.role === 'client') {
-          router.push('/dashboard/client');
-        } else if (data.user.role === 'professional') {
-          router.push('/dashboard/provider');
-        } else {
-          router.push('/');
-        }
+      // Sauvegarder dans localStorage
+      localStorage.setItem('util_user', JSON.stringify({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      }));
+
+      // Rediriger selon le rôle
+      if (user.role === 'client') {
+        router.push('/dashboard/client');
+      } else if (user.role === 'professional') {
+        router.push('/dashboard/provider');
       } else {
-        setError(data.error || 'Erreur de connexion');
+        router.push('/');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      setError('Une erreur est survenue. Réessayez.');
+      setError('Une erreur est survenue');
     } finally {
       setLoading(false);
     }
@@ -105,30 +113,6 @@ export default function Login() {
               <Link href="/signup-pro">Devenir prestataire</Link>
             </p>
           </div>
-
-          <div className="demo-accounts">
-            <h3>🧪 Comptes de test</h3>
-            <div className="demo-buttons">
-              <button
-                type="button"
-                className="demo-btn"
-                onClick={() => {
-                  setFormData({ email: 'client@test.com', password: 'test123' });
-                }}
-              >
-                👤 Client test
-              </button>
-              <button
-                type="button"
-                className="demo-btn"
-                onClick={() => {
-                  setFormData({ email: 'pro@test.com', password: 'test123' });
-                }}
-              >
-                💼 Pro test
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -141,24 +125,20 @@ export default function Login() {
           justify-content: center;
           padding: 40px 20px;
         }
-
         .login-container {
           width: 100%;
           max-width: 440px;
         }
-
         .login-card {
           background: white;
           border-radius: 24px;
           padding: 48px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
-
         .login-header {
           text-align: center;
           margin-bottom: 32px;
         }
-
         .login-header h1 {
           font-size: 32px;
           font-weight: 800;
@@ -167,13 +147,11 @@ export default function Login() {
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-
         .login-header p {
           font-size: 16px;
           color: #6b7280;
           margin: 0;
         }
-
         .error-banner {
           background: #fef2f2;
           border: 2px solid #fecaca;
@@ -184,22 +162,18 @@ export default function Login() {
           font-weight: 600;
           font-size: 14px;
         }
-
         .login-form {
           margin-bottom: 24px;
         }
-
         .form-group {
           margin-bottom: 20px;
         }
-
         .form-group label {
           display: block;
           font-weight: 600;
           margin-bottom: 8px;
           color: #374151;
         }
-
         .form-group input {
           width: 100%;
           height: 48px;
@@ -209,79 +183,28 @@ export default function Login() {
           font-size: 15px;
           transition: all 0.2s;
         }
-
         .form-group input:focus {
           outline: none;
           border-color: #3b82f6;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
-
         .btn-block {
           width: 100%;
         }
-
         .login-footer {
           text-align: center;
           padding-top: 24px;
           border-top: 1px solid #e5e7eb;
         }
-
         .login-footer p {
           margin: 8px 0;
           font-size: 14px;
           color: #6b7280;
         }
-
         .login-footer a {
           color: #3b82f6;
           font-weight: 600;
-          text-decoration: none;
         }
-
-        .login-footer a:hover {
-          text-decoration: underline;
-        }
-
-        .demo-accounts {
-          margin-top: 24px;
-          padding: 20px;
-          background: #f9fafb;
-          border-radius: 12px;
-          border: 2px dashed #e5e7eb;
-        }
-
-        .demo-accounts h3 {
-          font-size: 14px;
-          font-weight: 700;
-          margin: 0 0 12px;
-          text-align: center;
-          color: #6b7280;
-        }
-
-        .demo-buttons {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-        }
-
-        .demo-btn {
-          padding: 10px 16px;
-          background: white;
-          border: 2px solid #e5e7eb;
-          border-radius: 8px;
-          font-size: 13px;
-          font-weight: 600;
-          color: #374151;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .demo-btn:hover {
-          border-color: #3b82f6;
-          color: #3b82f6;
-          transform: translateY(-2px);
-        }
-
         @media (max-width: 480px) {
           .login-card {
             padding: 32px 24px;
