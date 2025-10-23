@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import Image from 'next/image';
 
 export default function Navbar() {
   const router = useRouter();
@@ -37,10 +38,13 @@ export default function Navbar() {
     <>
       <div className={`nav-left ${scrolled ? 'scrolled' : ''}`}>
         <Link href="/" className="brand-container">
-          <div className="brand-logo">
-            <span className="brand-icon">U</span>
+          <div className="brand-logo-wrapper">
+            <img 
+              src="/images/logo-util.png" 
+              alt="Util" 
+              className="brand-logo-img"
+            />
           </div>
-          <span className="brand-text">Util</span>
         </Link>
         
         <nav className="nav-links desktop-only">
@@ -147,7 +151,6 @@ export default function Navbar() {
         .brand-container {
           display: flex;
           align-items: center;
-          gap: 12px;
           transition: all 0.3s ease;
         }
 
@@ -155,38 +158,16 @@ export default function Navbar() {
           transform: translateY(-2px);
         }
 
-        .brand-logo {
-          width: 44px;
-          height: 44px;
-          background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-          border-radius: 12px;
+        .brand-logo-wrapper {
+          height: 50px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-          transition: all 0.3s ease;
         }
 
-        .brand-container:hover .brand-logo {
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-          transform: rotate(-3deg);
-        }
-
-        .brand-icon {
-          font-size: 24px;
-          font-weight: 900;
-          color: white;
-          letter-spacing: -0.02em;
-        }
-
-        .brand-text {
-          font-weight: 800;
-          font-size: 24px;
-          letter-spacing: -0.02em;
-          background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+        .brand-logo-img {
+          height: 50px;
+          width: auto;
+          object-fit: contain;
         }
 
         .nav-links {
@@ -214,7 +195,7 @@ export default function Navbar() {
           content: '';
           position: absolute;
           inset: 0;
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+          background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
           opacity: 0;
           transition: opacity 0.2s ease;
         }
@@ -229,8 +210,8 @@ export default function Navbar() {
         }
 
         .nav-link.active {
-          color: var(--accent);
-          background: rgba(59, 130, 246, 0.1);
+          color: #667eea;
+          background: rgba(102, 126, 234, 0.1);
         }
 
         .nav-link-icon {
@@ -335,7 +316,7 @@ export default function Navbar() {
 
         .mobile-nav-link:hover {
           background: white;
-          border-color: var(--accent);
+          border-color: #667eea;
           transform: translateX(-4px);
         }
 
@@ -353,7 +334,7 @@ export default function Navbar() {
         }
 
         .mobile-nav-link:hover .mobile-nav-arrow {
-          color: var(--accent);
+          color: #667eea;
           transform: translateX(4px);
         }
 
@@ -412,17 +393,12 @@ export default function Navbar() {
             gap: 16px;
           }
 
-          .brand-logo {
-            width: 40px;
+          .brand-logo-wrapper {
             height: 40px;
           }
 
-          .brand-icon {
-            font-size: 20px;
-          }
-
-          .brand-text {
-            font-size: 20px;
+          .brand-logo-img {
+            height: 40px;
           }
         }
       `}</style>
