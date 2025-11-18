@@ -1,113 +1,293 @@
-import fs from 'fs';
-import path from 'path';
+import {
+  asyncHandler,
+  methodNotAllowed,
+  successResponse,
+  errorResponse,
+  notFoundError,
+  validationError,
+  readDb,
+  writeDb,
+  generateId,
+  findById,
+  filterBy,
+  paginate,
+  parseQueryParams
+} from '../../../lib/apiHelpers';
+import {
+  validateText,
+  validateAmount,
+  validateID,
+  sanitizeString
+} from '../../../lib/validation';
 
 /**
- * API route pour les demandes (requests).
- * GET: Liste des demandes filtrées
+ * API route pour les demandes de services.
+ *
+ * GET: Liste des demandes filtrées avec pagination
  * POST: Créer une nouvelle demande
+ * PATCH: Mettre à jour une demande existante
  */
-export default function handler(req, res) {
-  const dbPath = path.join(process.cwd(), 'data', 'db.json');
-  
-  // Créer le fichier DB s'il n'existe pas
-  if (!fs.existsSync(dbPath)) {
-    const dirPath = path.dirname(dbPath);
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-    fs.writeFileSync(dbPath, JSON.stringify({ users: [], requests: [], quotes: [] }, null, 2));
+export default asyncHandler(async (req, res) => {
+  const allowedMethods = ['GET', 'POST', 'PATCH'];
+
+  if (!allowedMethods.includes(req.method)) {
+    return methodNotAllowed(res, allowedMethods);
   }
 
-  const db = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+  const db = readDb();
 
+  // GET - Récupérer les demandes
   if (req.method === 'GET') {
-    const { clientId, professionalId, id } = req.query;
+    const queryParams = parseQueryParams(req, {
+      clientId: 'string',
+      professionalId: 'string',
+      id: 'string',
+      status: 'string',
+      page: 'number',
+      limit: 'number'
+    });
+
+    const {
+      clientId,
+      professionalId,
+      id,
+      status,
+      page = 1,
+      limit = 10
+    } = queryParams;
+
     let requests = db.requests || [];
 
-    // Filtrage
+    // Récupérer une demande spécifique
     if (id) {
-      const request = requests.find((r) => r.id === id);
-      return res.status(request ? 200 : 404).json(request || { error: 'Demande introuvable' });
+      const request = findById(requests, id);
+
+      if (!request) {
+        return notFoundError(res, 'Demande');
+      }
+
+      // Enrichir avec les informations du client et du professionnel
+      const client = findById(db.users, request.clientId);
+      const professional = findById(db.users, request.professionalId);
+
+      return successResponse(res, {
+        ...request,
+        client: client ? {
+          id: client.id,
+          name: client.name,
+          email: client.email
+        } : null,
+        professional: professional ? {
+          id: professional.id,
+          name: professional.name,
+          email: professional.email,
+          category: professional.category,
+          rating: professional.rating
+        } : null
+      });
     }
 
+    // Filtrer les demandes
     if (clientId) {
-      requests = requests.filter((r) => r.clientId === clientId);
+      requests = filterBy(requests, 'clientId', clientId);
     }
 
     if (professionalId) {
-      requests = requests.filter((r) => r.professionalId === professionalId);
+      requests = filterBy(requests, 'professionalId', professionalId);
+    }
+
+    if (status) {
+      requests = filterBy(requests, 'status', status);
     }
 
     // Tri par date (plus récent en premier)
     requests.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    return res.status(200).json(requests);
+    // Pagination
+    const paginatedData = paginate(requests, page, limit);
+
+    return successResponse(res, paginatedData, 'Demandes récupérées avec succès');
   }
 
+  // POST - Créer une nouvelle demande
   if (req.method === 'POST') {
-    const { title, description, budget, clientId, professionalId } = req.body;
+    const {
+      title,
+      description,
+      budget,
+      clientId,
+      professionalId,
+      category,
+      location,
+      urgency = 'normal'
+    } = req.body;
 
-    // Validation
-    if (!title || !description || !clientId || !professionalId) {
-      return res.status(400).json({ error: 'Champs requis manquants' });
+    // Validation des champs
+    const errors = {};
+
+    // Valider le titre
+    const titleValidation = validateText(
+      title,
+      5,
+      100,
+      'Titre'
+    );
+    if (!titleValidation.valid) {
+      errors.title = titleValidation.error;
     }
 
-    // Vérifier que le client et le pro existent
-    const client = db.users.find((u) => u.id === clientId && u.role === 'client');
-    const professional = db.users.find((u) => u.id === professionalId && u.role === 'professional');
-
-    if (!client) {
-      return res.status(400).json({ error: 'Client invalide' });
+    // Valider la description
+    const descValidation = validateText(
+      description,
+      20,
+      2000,
+      'Description'
+    );
+    if (!descValidation.valid) {
+      errors.description = descValidation.error;
     }
 
-    if (!professional) {
-      return res.status(400).json({ error: 'Professionnel invalide' });
+    // Valider le budget (optionnel)
+    if (budget) {
+      const budgetValidation = validateAmount(budget, 0, 100000);
+      if (!budgetValidation.valid) {
+        errors.budget = budgetValidation.error;
+      }
+    }
+
+    // Valider les IDs
+    const clientIdValidation = validateID(clientId, 'Client ID');
+    if (!clientIdValidation.valid) {
+      errors.clientId = clientIdValidation.error;
+    }
+
+    if (professionalId) {
+      const proIdValidation = validateID(professionalId, 'Professional ID');
+      if (!proIdValidation.valid) {
+        errors.professionalId = proIdValidation.error;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return validationError(res, errors);
+    }
+
+    // Vérifier que le client existe
+    const client = findById(db.users, clientId);
+    if (!client || client.role !== 'client') {
+      return errorResponse(res, 'Client invalide ou introuvable', 400);
+    }
+
+    // Vérifier que le professionnel existe (si spécifié)
+    if (professionalId) {
+      const professional = findById(db.users, professionalId);
+      if (!professional || professional.role !== 'professional') {
+        return errorResponse(res, 'Professionnel invalide ou introuvable', 400);
+      }
     }
 
     // Créer la demande
-    const id = Date.now().toString();
     const request = {
-      id,
-      title: title.trim(),
-      description: description.trim(),
+      id: generateId('req-'),
+      title: sanitizeString(title.trim()),
+      description: sanitizeString(description.trim()),
       budget: budget ? parseFloat(budget) : null,
       clientId,
-      professionalId,
+      professionalId: professionalId || null,
+      category: category || null,
+      location: location || null,
+      urgency,
       status: 'pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      quotesCount: 0,
+      rating: null,
+      review: null
     };
 
-    db.requests.push(request);
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+    if (!db.requests) {
+      db.requests = [];
+    }
 
-    return res.status(201).json(request);
+    db.requests.push(request);
+    writeDb(db);
+
+    return successResponse(
+      res,
+      request,
+      'Demande créée avec succès',
+      201
+    );
   }
 
+  // PATCH - Mettre à jour une demande
   if (req.method === 'PATCH') {
-    const { id, status, rating, review } = req.body;
+    const { id, status, rating, review, professionalId } = req.body;
 
-    if (!id) {
-      return res.status(400).json({ error: 'ID requis' });
+    // Validation de l'ID
+    const idValidation = validateID(id, 'ID');
+    if (!idValidation.valid) {
+      return validationError(res, { id: idValidation.error });
     }
 
     const requestIndex = db.requests.findIndex((r) => r.id === id);
-    
+
     if (requestIndex === -1) {
-      return res.status(404).json({ error: 'Demande introuvable' });
+      return notFoundError(res, 'Demande');
     }
 
-    // Mise à jour
-    if (status) db.requests[requestIndex].status = status;
-    if (rating) db.requests[requestIndex].rating = Number(rating);
-    if (review) db.requests[requestIndex].review = review;
-    
+    const errors = {};
+
+    // Valider le statut si fourni
+    const validStatuses = ['pending', 'quote_received', 'accepted', 'in_progress', 'completed', 'cancelled'];
+    if (status && !validStatuses.includes(status)) {
+      errors.status = 'Statut invalide';
+    }
+
+    // Valider la note si fournie
+    if (rating !== undefined) {
+      if (isNaN(rating) || rating < 1 || rating > 5) {
+        errors.rating = 'La note doit être entre 1 et 5';
+      }
+    }
+
+    // Valider l'avis si fourni
+    if (review) {
+      const reviewValidation = validateText(review, 10, 1000, 'Avis');
+      if (!reviewValidation.valid) {
+        errors.review = reviewValidation.error;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return validationError(res, errors);
+    }
+
+    // Mise à jour des champs
+    if (status) {
+      db.requests[requestIndex].status = status;
+    }
+
+    if (rating !== undefined) {
+      db.requests[requestIndex].rating = Number(rating);
+    }
+
+    if (review) {
+      db.requests[requestIndex].review = sanitizeString(review);
+    }
+
+    if (professionalId) {
+      db.requests[requestIndex].professionalId = professionalId;
+    }
+
     db.requests[requestIndex].updatedAt = new Date().toISOString();
 
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+    writeDb(db);
 
-    return res.status(200).json(db.requests[requestIndex]);
+    return successResponse(
+      res,
+      db.requests[requestIndex],
+      'Demande mise à jour avec succès'
+    );
   }
-
-  return res.status(405).json({ error: 'Méthode non autorisée' });
-}
+});
